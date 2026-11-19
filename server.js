@@ -148,24 +148,25 @@ function backToLobby(room) {
 
 /* ---------- SUBASTA 1vs1 (Arcade) ---------- */
 const aucs = new Map(); // id -> sala de subasta
-const T_BID = 20000, T_SOLD = 4000, A_ROUNDS = 5, A_MONEY = 20, A_VAL = [2, 3, 5, 7, 10, 14];
+const T_BID = 20000, T_SOLD = 4000, A_SLOTS = 4, A_MAXR = 16, A_MONEY = 20, A_VAL = [2, 3, 5, 7, 10, 14];
+const aDone = (a, pid) => a.got[pid].length >= A_SLOTS || a.money[pid] < 1;
 const aOther = (r, pid) => { const o = r.ps.find(x => x.pid !== pid); return o ? o.pid : null; };
 function aSnap(r, pid) {
   const a = r.a, o = { id: r.id, code: r.code, quick: !!r.quick, phase: r.phase, host: r.host, me: pid, ps: r.ps.map(p => ({ pid: p.pid, name: p.name, on: p.on })), a: null };
-  if (a) o.a = { i: a.i, total: a.total, item: a.items[Math.min(a.i, a.total - 1)], money: a.money, got: a.got, bid: a.bid, bidder: a.bidder, turn: a.turn, endAt: a.endAt, now: Date.now(), res: a.res, win: a.win, pts: a.pts, why: a.why };
+  if (a) o.a = { i: a.i, total: a.total, slots: a.slots, item: a.items[Math.min(a.i, a.total - 1)], money: a.money, got: a.got, bid: a.bid, bidder: a.bidder, turn: a.turn, endAt: a.endAt, now: Date.now(), res: a.res, win: a.win, pts: a.pts, why: a.why };
   return o;
 }
 const aBroadcast = r => r.ps.forEach(m => { const p = players.get(m.pid); if (p && m.on) send(p, { t: 'sa_room', room: aSnap(r, m.pid) }); });
 function aStart(r) {
   const ok = (r.pool || []).filter(x => Array.isArray(x) && typeof x[0] === 'string' && x[1] >= 0 && x[1] <= 5);
-  if (ok.length < A_ROUNDS) return 'No hay suficientes frikirappers para subastar';
-  const items = shuffle(ok).slice(0, A_ROUNDS).map(x => ({ n: clean(x[0], 60), r: x[1] | 0 }));
+  if (ok.length < A_SLOTS * 3) return 'No hay suficientes frikirappers para subastar';
+  const items = shuffle(ok).slice(0, A_MAXR).map(x => ({ n: clean(x[0], 60), r: x[1] | 0 }));
   const money = {}, got = {}; r.ps.forEach(p => { money[p.pid] = A_MONEY; got[p.pid] = []; });
-  r.a = { i: 0, total: A_ROUNDS, items, money, got, bid: 0, bidder: null, turn: null, endAt: 0, res: null, pp: 0, first: pick(r.ps).pid, win: null, pts: null, why: null };
+  r.a = { i: 0, total: items.length, slots: A_SLOTS, items, money, got, bid: 0, bidder: null, turn: null, endAt: 0, res: null, pp: 0, first: pick(r.ps).pid, win: null, pts: null, why: null };
   aRound(r); return null;
 }
 function aRound(r) {
-  const a = r.a; clearTimeout(r.timer); a.bid = 0; a.bidder = null; a.pp = 0; a.res = null; a.turn = a.first; r.phase = 'bid';
+  const a = r.a; clearTimeout(r.timer); a.bid = 0; a.bidder = null; a.pp = 0; a.res = null; if (aDone(a, a.first)) a.first = aOther(r, a.first) || a.first; a.turn = a.first; r.phase = 'bid';
   aTurnTimer(r); aBroadcast(r);
 }
 function aTurnTimer(r) { const a = r.a; clearTimeout(r.timer); a.endAt = Date.now() + T_BID; const who = a.turn; r.timer = setTimeout(() => aPass(r, who), T_BID); }
@@ -173,7 +174,7 @@ function aSell(r, w) {
   const a = r.a; clearTimeout(r.timer); const it = a.items[a.i]; r.phase = 'sold';
   if (w) { a.money[w] -= a.bid; a.got[w].push(it); a.res = { who: w, bid: a.bid, item: it }; } else a.res = { who: null, bid: 0, item: it };
   a.endAt = Date.now() + T_SOLD; aBroadcast(r);
-  r.timer = setTimeout(() => { a.i++; if (a.i >= a.total) return aEnd(r); a.first = aOther(r, a.first) || a.first; aRound(r); }, T_SOLD);
+  r.timer = setTimeout(() => { a.i++; if (a.i >= a.total || r.ps.every(p => aDone(a, p.pid))) return aEnd(r); a.first = aOther(r, a.first) || a.first; aRound(r); }, T_SOLD);
 }
 function aEnd(r, why, forceWin) {
   const a = r.a; clearTimeout(r.timer); const pts = {}; r.ps.forEach(p => { pts[p.pid] = (a.got[p.pid] || []).reduce((s, x) => s + (A_VAL[x.r] || 2), 0); });
@@ -184,14 +185,14 @@ function aEnd(r, why, forceWin) {
 function aPass(r, pid) {
   const a = r.a; if (!a || r.phase !== 'bid' || a.turn !== pid) return;
   if (a.bidder) return aSell(r, a.bidder);
-  a.pp++; if (a.pp >= 2) return aSell(r, null);
+  a.pp++; if (a.pp >= 2 || aDone(a, aOther(r, pid))) return aSell(r, null);
   a.turn = aOther(r, pid); aTurnTimer(r); aBroadcast(r);
 }
 function aBid(r, pid, inc) {
   const a = r.a; if (!a || r.phase !== 'bid' || a.turn !== pid) return; inc = inc | 0; if (![1, 2, 5].includes(inc)) return;
   const nb = a.bid + inc; if (nb > a.money[pid]) return;
   a.bid = nb; a.bidder = pid; a.pp = 0; const o = aOther(r, pid); a.turn = o;
-  if (a.money[o] < nb + 1) return aSell(r, pid);
+  if (a.money[o] < nb + 1 || aDone(a, o)) return aSell(r, pid);
   aTurnTimer(r); aBroadcast(r);
 }
 function aLeave(p) {
