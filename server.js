@@ -6,15 +6,17 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 3000;
-const PUB = fs.existsSync(path.join(__dirname, 'public', 'index.html')) ? path.join(__dirname, 'public') : __dirname; // si no hay carpeta public, sirve el index.html que esté junto a server.js
+const MAINS = ['FrikirapperCreatorV1.2.html', 'index.html'];
+const PUB = MAINS.some(n => fs.existsSync(path.join(__dirname, 'public', n))) ? path.join(__dirname, 'public') : __dirname;
+const MAIN = MAINS.find(n => fs.existsSync(path.join(PUB, n))) || 'index.html'; // si no hay carpeta public, sirve el index.html que esté junto a server.js
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon' };
 
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);
   if (url === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' }); return res.end('ok'); }
-  const f = path.join(PUB, path.normalize(url === '/' ? '/index.html' : url));
+  const f = path.join(PUB, path.normalize(url === '/' ? '/' + MAIN : url));
   if (!f.startsWith(PUB)) { res.writeHead(403); return res.end('Prohibido'); }
-  if (PUB === __dirname && url !== '/' && url !== '/index.html') { res.writeHead(404); return res.end('No encontrado'); }
+  if (PUB === __dirname && url !== '/' && url !== '/' + MAIN) { res.writeHead(404); return res.end('No encontrado'); }
   fs.readFile(f, (e, d) => {
     if (e) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Servidor del Impostor funcionando. Pon tu juego en public/index.html'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }); res.end(d);
@@ -144,8 +146,95 @@ function backToLobby(room) {
   room.ps = room.ps.filter(p => !p.left && p.on); room.ps.forEach(p => { p.alive = true; }); room.chat = []; broadcast(room);
 }
 
+/* ---------- SUBASTA 1vs1 (Arcade) ---------- */
+const aucs = new Map(); // id -> sala de subasta
+const T_BID = 20000, T_SOLD = 4000, A_ROUNDS = 5, A_MONEY = 20, A_VAL = [2, 3, 5, 7, 10, 14];
+const aOther = (r, pid) => { const o = r.ps.find(x => x.pid !== pid); return o ? o.pid : null; };
+function aSnap(r, pid) {
+  const a = r.a, o = { id: r.id, code: r.code, quick: !!r.quick, phase: r.phase, host: r.host, me: pid, ps: r.ps.map(p => ({ pid: p.pid, name: p.name, on: p.on })), a: null };
+  if (a) o.a = { i: a.i, total: a.total, item: a.items[Math.min(a.i, a.total - 1)], money: a.money, got: a.got, bid: a.bid, bidder: a.bidder, turn: a.turn, endAt: a.endAt, now: Date.now(), res: a.res, win: a.win, pts: a.pts, why: a.why };
+  return o;
+}
+const aBroadcast = r => r.ps.forEach(m => { const p = players.get(m.pid); if (p && m.on) send(p, { t: 'sa_room', room: aSnap(r, m.pid) }); });
+function aStart(r) {
+  const ok = (r.pool || []).filter(x => Array.isArray(x) && typeof x[0] === 'string' && x[1] >= 0 && x[1] <= 5);
+  if (ok.length < A_ROUNDS) return 'No hay suficientes frikirappers para subastar';
+  const items = shuffle(ok).slice(0, A_ROUNDS).map(x => ({ n: clean(x[0], 60), r: x[1] | 0 }));
+  const money = {}, got = {}; r.ps.forEach(p => { money[p.pid] = A_MONEY; got[p.pid] = []; });
+  r.a = { i: 0, total: A_ROUNDS, items, money, got, bid: 0, bidder: null, turn: null, endAt: 0, res: null, pp: 0, first: pick(r.ps).pid, win: null, pts: null, why: null };
+  aRound(r); return null;
+}
+function aRound(r) {
+  const a = r.a; clearTimeout(r.timer); a.bid = 0; a.bidder = null; a.pp = 0; a.res = null; a.turn = a.first; r.phase = 'bid';
+  aTurnTimer(r); aBroadcast(r);
+}
+function aTurnTimer(r) { const a = r.a; clearTimeout(r.timer); a.endAt = Date.now() + T_BID; const who = a.turn; r.timer = setTimeout(() => aPass(r, who), T_BID); }
+function aSell(r, w) {
+  const a = r.a; clearTimeout(r.timer); const it = a.items[a.i]; r.phase = 'sold';
+  if (w) { a.money[w] -= a.bid; a.got[w].push(it); a.res = { who: w, bid: a.bid, item: it }; } else a.res = { who: null, bid: 0, item: it };
+  a.endAt = Date.now() + T_SOLD; aBroadcast(r);
+  r.timer = setTimeout(() => { a.i++; if (a.i >= a.total) return aEnd(r); a.first = aOther(r, a.first) || a.first; aRound(r); }, T_SOLD);
+}
+function aEnd(r, why, forceWin) {
+  const a = r.a; clearTimeout(r.timer); const pts = {}; r.ps.forEach(p => { pts[p.pid] = (a.got[p.pid] || []).reduce((s, x) => s + (A_VAL[x.r] || 2), 0); });
+  const [p1, p2] = r.ps.map(p => p.pid); let win = 'tie';
+  if (forceWin) win = forceWin; else if (p1 && p2) { if (pts[p1] !== pts[p2]) win = pts[p1] > pts[p2] ? p1 : p2; else if (a.money[p1] !== a.money[p2]) win = a.money[p1] > a.money[p2] ? p1 : p2; }
+  a.pts = pts; a.win = win; a.why = why || null; r.phase = 'end'; a.endAt = 0; aBroadcast(r);
+}
+function aPass(r, pid) {
+  const a = r.a; if (!a || r.phase !== 'bid' || a.turn !== pid) return;
+  if (a.bidder) return aSell(r, a.bidder);
+  a.pp++; if (a.pp >= 2) return aSell(r, null);
+  a.turn = aOther(r, pid); aTurnTimer(r); aBroadcast(r);
+}
+function aBid(r, pid, inc) {
+  const a = r.a; if (!a || r.phase !== 'bid' || a.turn !== pid) return; inc = inc | 0; if (![1, 2, 5].includes(inc)) return;
+  const nb = a.bid + inc; if (nb > a.money[pid]) return;
+  a.bid = nb; a.bidder = pid; a.pp = 0; const o = aOther(r, pid); a.turn = o;
+  if (a.money[o] < nb + 1) return aSell(r, pid);
+  aTurnTimer(r); aBroadcast(r);
+}
+function aLeave(p) {
+  const r = aucs.get(p.aroom); p.aroom = null; if (!r) return; clearTimeout(p.adrop);
+  const m = r.ps.find(x => x.pid === p.pid); if (!m) return;
+  if (r.phase === 'lobby') { r.ps = r.ps.filter(x => x.pid !== p.pid); if (!r.ps.length) { aucs.delete(r.id); return; } r.host = r.ps[0].pid; return aBroadcast(r); }
+  const o = aOther(r, p.pid);
+  if (r.phase !== 'end' && o) { r.ps = r.ps.filter(x => x.pid !== p.pid); aEnd(r, m.name + ' abandonó la subasta', o); const op = players.get(o); if (op) op.aroom = r.id; r.left = true; }
+  else { r.ps = r.ps.filter(x => x.pid !== p.pid); if (!r.ps.length) { clearTimeout(r.timer); aucs.delete(r.id); } else aBroadcast(r); }
+}
+function aNew(p, pool, pub, quick) {
+  const r = { id: crypto.randomBytes(4).toString('hex'), code: newCode(), pub: !!pub, quick: !!quick, host: p.pid, phase: 'lobby', pool: Array.isArray(pool) ? pool.slice(0, 600) : [], ps: [{ pid: p.pid, name: p.name, on: true }], a: null, timer: null };
+  aucs.set(r.id, r); p.aroom = r.id; aBroadcast(r); return r;
+}
+function aJoin(p, r) {
+  r.ps.push({ pid: p.pid, name: r.ps.some(x => x.name === p.name) ? p.name + ' 2' : p.name, on: true }); p.aroom = r.id;
+  const e = aStart(r); if (e) { err(p, e); aLeave(p); }
+}
+function aMsg(p, m) {
+  const r = aucs.get(p.aroom);
+  switch (m.t) {
+    case 'sa_quick': {
+      if (r || rooms.get(p.roomId)) return err(p, 'Ya estás en una sala');
+      const w = [...aucs.values()].find(x => x.quick && x.phase === 'lobby' && x.ps.length === 1);
+      return w ? aJoin(p, w) : aNew(p, m.pool, true, true);
+    }
+    case 'sa_create': { if (r || rooms.get(p.roomId)) return err(p, 'Ya estás en una sala'); return aNew(p, m.pool, false, false); }
+    case 'sa_join': {
+      if (r || rooms.get(p.roomId)) return err(p, 'Ya estás en una sala');
+      const code = clean(m.code, 8).toUpperCase(), w = [...aucs.values()].find(x => x.code === code);
+      if (!w) return err(p, 'Código incorrecto o sala inexistente'); if (w.phase !== 'lobby' || w.ps.length >= 2) return err(p, 'Esa sala ya está llena');
+      return aJoin(p, w);
+    }
+    case 'sa_leave': return aLeave(p);
+    case 'sa_bid': return r && aBid(r, p.pid, m.inc);
+    case 'sa_pass': return r && aPass(r, p.pid);
+    case 'sa_again': { if (!r || r.phase !== 'end' || r.host !== p.pid || r.ps.length < 2 || r.ps.some(x => !x.on)) return; const e = aStart(r); return e ? err(p, e) : null; }
+  }
+}
+
 /* ---------- mensajes ---------- */
 function onMsg(p, m) {
+  if (m.t.indexOf('sa_') === 0) return aMsg(p, m);
   const room = rooms.get(p.roomId), me = room && room.ps.find(x => x.pid === p.pid), g = room && room.g;
   switch (m.t) {
     case 'list': return send(p, { t: 'rooms', rooms: listRooms() });
@@ -202,15 +291,18 @@ wss.on('connection', ws => {
       else { p = { pid: crypto.randomBytes(12).toString('hex'), name, ws, roomId: null, drop: null }; players.set(p.pid, p); }
       send(p, { t: 'hello', pid: p.pid });
       const room = rooms.get(p.roomId); if (room) { const mm = room.ps.find(x => x.pid === p.pid); if (mm) { mm.on = true; sys(room, mm.name + ' volvió a conectarse'); broadcast(room); } else p.roomId = null; }
+      const ar = aucs.get(p.aroom); if (ar) { const am = ar.ps.find(x => x.pid === p.pid); if (am) { am.on = true; aBroadcast(ar); } else p.aroom = null; }
       return;
     }
     if (!p) return; onMsg(p, m);
   });
   ws.on('close', () => {
-    if (!p || p.ws !== ws) return; const room = rooms.get(p.roomId);
-    if (!room) { players.delete(p.pid); return; }
-    const mm = room.ps.find(x => x.pid === p.pid); if (mm) { mm.on = false; broadcast(room); }
-    p.drop = setTimeout(() => { if (p.ws === ws || !p.ws || p.ws.readyState !== 1) { removeFromRoom(p, 'leave'); players.delete(p.pid); } }, room.phase === 'lobby' ? 20000 : 90000);
+    if (!p || p.ws !== ws) return; const room = rooms.get(p.roomId), ar = aucs.get(p.aroom);
+    if (!room && !ar) { players.delete(p.pid); return; }
+    if (room) { const mm = room.ps.find(x => x.pid === p.pid); if (mm) { mm.on = false; broadcast(room); } }
+    if (ar) { const am = ar.ps.find(x => x.pid === p.pid); if (am) { am.on = false; aBroadcast(ar); } }
+    const T = room ? (room.phase === 'lobby' ? 20000 : 90000) : (ar.phase === 'lobby' ? 20000 : 60000);
+    p.drop = setTimeout(() => { if (p.ws === ws || !p.ws || p.ws.readyState !== 1) { if (rooms.get(p.roomId)) removeFromRoom(p, 'leave'); if (aucs.get(p.aroom)) aLeave(p); players.delete(p.pid); } }, T);
   });
   ws.on('error', () => { });
 });
