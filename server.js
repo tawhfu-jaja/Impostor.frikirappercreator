@@ -6,7 +6,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 3000;
-const PUB = path.join(__dirname, 'public');
+const PUB = fs.existsSync(path.join(__dirname, 'public', 'index.html')) ? path.join(__dirname, 'public') : __dirname; // si no hay carpeta public, sirve el index.html que esté junto a server.js
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon' };
 
 const server = http.createServer((req, res) => {
@@ -14,6 +14,7 @@ const server = http.createServer((req, res) => {
   if (url === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' }); return res.end('ok'); }
   const f = path.join(PUB, path.normalize(url === '/' ? '/index.html' : url));
   if (!f.startsWith(PUB)) { res.writeHead(403); return res.end('Prohibido'); }
+  if (PUB === __dirname && url !== '/' && url !== '/index.html') { res.writeHead(404); return res.end('No encontrado'); }
   fs.readFile(f, (e, d) => {
     if (e) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Servidor del Impostor funcionando. Pon tu juego en public/index.html'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }); res.end(d);
