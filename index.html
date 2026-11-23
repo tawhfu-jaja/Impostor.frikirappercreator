@@ -2887,7 +2887,7 @@ function uhDraw(dt){const G=UHG,cv=G.cv,dpr=Math.min(2,devicePixelRatio||1),W=cv
  const T=Math.max(22,Math.round(Math.min(W,H)/15));if(G.T!=T){G.T=T;G.tiles=null}if(!G.tiles)G.tiles=uhTiles(T);
  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.imageSmoothingEnabled=false;const r=UHO.room,me=uhMe();
  /* cámara */
- let tx=G.L.x,ty=G.L.y+(G.look||0)*3.2;if(G.al===false){const al=r.ps.map((p,i)=>i).filter(i=>G.pl[i]&&G.pl[i].al&&i!=me);if(al.length){const i=al[G.spec%al.length];tx=G.pl[i].x;ty=G.pl[i].y}}
+ let tx=G.L.x,ty=G.L.y;if(G.al===false){const al=r.ps.map((p,i)=>i).filter(i=>G.pl[i]&&G.pl[i].al&&i!=me);if(al.length){const i=al[G.spec%al.length];tx=G.pl[i].x;ty=G.pl[i].y}}
  G.cam.x+=(tx-G.cam.x)*Math.min(1,dt*8);G.cam.y+=(ty-G.cam.y)*Math.min(1,dt*8);
  const cx=G.cam.x,cy=G.cam.y,ox=W/2-cx*T,oy=H/2-cy*T,sx=v=>v*T+ox,sy=v=>v*T+oy;
  const sk=x.createLinearGradient(0,0,0,H);sk.addColorStop(0,'#6fb6ff');sk.addColorStop(1,'#d2ecff');x.fillStyle=sk;x.fillRect(0,0,W,H);
@@ -3375,8 +3375,8 @@ function uhJoyInit(){const G=UHG;if(!G||G.joy)return;const el=G.el;
  const val=(dx,dy)=>{const d=Math.hypot(dx,dy),m=Math.min(d,R),a=Math.atan2(dy,dx),kx=Math.cos(a)*m,ky=Math.sin(a)*m;k.style.transform='translate('+kx+'px,'+ky+'px)';
   const nx=kx/R,ny=ky/R;K.l=nx<-.3?1:0;K.r=nx>.3?1:0;
   const v=ny<-.5?'u':ny>.5?'d':'f';if(G.aim!=v){G.aim=v;if(typeof uhAimUI=='function')uhAimUI()}
-  G.look=Math.abs(ny)<.3?0:Math.sign(ny)*Math.min(1,(Math.abs(ny)-.3)/.5);G.btnUsed=1};
- const reset=()=>{K.l=0;K.r=0;G.aim='f';G.look=0;k.style.transform='';b.classList.remove('on');b.style.left=b.style.top=b.style.bottom='';if(typeof uhAimUI=='function')uhAimUI()};
+  G.btnUsed=1};
+ const reset=()=>{K.l=0;K.r=0;G.aim='f';k.style.transform='';b.classList.remove('on');b.style.left=b.style.top=b.style.bottom='';if(typeof uhAimUI=='function')uhAimUI()};
  z.addEventListener('pointerdown',ev=>{if(pid!==null)return;ev.preventDefault();pid=ev.pointerId;try{z.setPointerCapture(pid)}catch(e){}
   const r=z.getBoundingClientRect();ox=Math.max(R+8,Math.min(r.width-R-8,ev.clientX-r.left));oy=Math.max(R+8,Math.min(r.height-R-8,ev.clientY-r.top));
   b.style.bottom='auto';b.style.left=(ox-R)+'px';b.style.top=(oy-R)+'px';b.classList.add('on');val(ev.clientX-r.left-ox,ev.clientY-r.top-oy)});
