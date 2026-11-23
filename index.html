@@ -2887,7 +2887,7 @@ function uhDraw(dt){const G=UHG,cv=G.cv,dpr=Math.min(2,devicePixelRatio||1),W=cv
  const T=Math.max(22,Math.round(Math.min(W,H)/15));if(G.T!=T){G.T=T;G.tiles=null}if(!G.tiles)G.tiles=uhTiles(T);
  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.imageSmoothingEnabled=false;const r=UHO.room,me=uhMe();
  /* cámara */
- let tx=G.L.x,ty=G.L.y;if(G.al===false){const al=r.ps.map((p,i)=>i).filter(i=>G.pl[i]&&G.pl[i].al&&i!=me);if(al.length){const i=al[G.spec%al.length];tx=G.pl[i].x;ty=G.pl[i].y}}
+ let tx=G.L.x,ty=G.L.y+(G.look||0)*3.2;if(G.al===false){const al=r.ps.map((p,i)=>i).filter(i=>G.pl[i]&&G.pl[i].al&&i!=me);if(al.length){const i=al[G.spec%al.length];tx=G.pl[i].x;ty=G.pl[i].y}}
  G.cam.x+=(tx-G.cam.x)*Math.min(1,dt*8);G.cam.y+=(ty-G.cam.y)*Math.min(1,dt*8);
  const cx=G.cam.x,cy=G.cam.y,ox=W/2-cx*T,oy=H/2-cy*T,sx=v=>v*T+ox,sy=v=>v*T+oy;
  const sk=x.createLinearGradient(0,0,0,H);sk.addColorStop(0,'#6fb6ff');sk.addColorStop(1,'#d2ecff');x.fillStyle=sk;x.fillRect(0,0,W,H);
@@ -3363,4 +3363,56 @@ function uhReticle(){const G=UHG;if(!G||!G.w||G.al===false||!(G.btnUsed||uhTouch
 #uhrot b{font-size:24px}#uhrot span{font-size:16px;opacity:.9}#uhrot small{opacity:.7;max-width:280px}#uhrot a{font-size:13px;opacity:.75;text-decoration:underline;cursor:pointer;margin-top:6px}
 .uhrph{font-size:72px;animation:uhrot 2.2s ease-in-out infinite}@keyframes uhrot{0%,25%{transform:rotate(0)}60%,85%{transform:rotate(-90deg)}100%{transform:rotate(0)}}`;document.head.appendChild(s)})();
 
+
+/* ===== FRIKILAND UHC · controles táctiles v2: joystick flotante + pantalla más despejada ===== */
+(function(){
+const R=48;
+function uhJoyInit(){const G=UHG;if(!G||G.joy)return;const el=G.el;
+ ['uhl','uhr','uhau','uhad'].forEach(id=>{const e=el.querySelector('#'+id);if(e)e.remove()});
+ ['uhj','uha','uhdg','uhpl','uhm','uhcb','uhx'].forEach(id=>{const e=el.querySelector('#'+id);if(e){e.style.left=e.style.right=e.style.top=e.style.bottom='';e.style.margin=''}});
+ const z=document.createElement('div');z.id='uhjz';z.innerHTML='<div id="uhjb"><i class="jl">◀</i><i class="jr">▶</i><i class="ju">▲</i><i class="jd">▼</i><div id="uhjk"></div></div>';el.appendChild(z);
+ const b=z.querySelector('#uhjb'),k=z.querySelector('#uhjk'),K=G.keys;let pid=null,ox=0,oy=0;
+ const val=(dx,dy)=>{const d=Math.hypot(dx,dy),m=Math.min(d,R),a=Math.atan2(dy,dx),kx=Math.cos(a)*m,ky=Math.sin(a)*m;k.style.transform='translate('+kx+'px,'+ky+'px)';
+  const nx=kx/R,ny=ky/R;K.l=nx<-.3?1:0;K.r=nx>.3?1:0;
+  const v=ny<-.5?'u':ny>.5?'d':'f';if(G.aim!=v){G.aim=v;if(typeof uhAimUI=='function')uhAimUI()}
+  G.look=Math.abs(ny)<.3?0:Math.sign(ny)*Math.min(1,(Math.abs(ny)-.3)/.5);G.btnUsed=1};
+ const reset=()=>{K.l=0;K.r=0;G.aim='f';G.look=0;k.style.transform='';b.classList.remove('on');b.style.left=b.style.top=b.style.bottom='';if(typeof uhAimUI=='function')uhAimUI()};
+ z.addEventListener('pointerdown',ev=>{if(pid!==null)return;ev.preventDefault();pid=ev.pointerId;try{z.setPointerCapture(pid)}catch(e){}
+  const r=z.getBoundingClientRect();ox=Math.max(R+8,Math.min(r.width-R-8,ev.clientX-r.left));oy=Math.max(R+8,Math.min(r.height-R-8,ev.clientY-r.top));
+  b.style.bottom='auto';b.style.left=(ox-R)+'px';b.style.top=(oy-R)+'px';b.classList.add('on');val(ev.clientX-r.left-ox,ev.clientY-r.top-oy)});
+ z.addEventListener('pointermove',ev=>{if(ev.pointerId!==pid)return;const r=z.getBoundingClientRect();val(ev.clientX-r.left-ox,ev.clientY-r.top-oy)});
+ const end=ev=>{if(ev.pointerId!==pid)return;pid=null;reset()};
+ z.addEventListener('pointerup',end);z.addEventListener('pointercancel',end);z.addEventListener('lostpointercapture',end);
+ G.joy=1}
+{const _o=uhOpenG;uhOpenG=function(){const had=!!UHG;_o.apply(this,arguments);if(!had&&UHG){document.body.classList.add('uhplay');try{uhJoyInit()}catch(e){console.error(e)}}}}
+{const _c=uhCloseG;uhCloseG=function(){_c.apply(this,arguments);document.body.classList.remove('uhplay')}}
+{const _i=uhInvUpd;uhInvUpd=function(){const G=UHG,bar=G&&G.el.querySelector('#uhbar'),sl=bar?bar.scrollLeft:0;_i.apply(this,arguments);if(bar){bar.scrollLeft=sl}}}
+const s=document.createElement('style');s.textContent=`
+#uhg{--bs:clamp(42px,12.5vh,58px);--ts:clamp(34px,10vh,42px);--gp:8px;--mg:12px}
+#uhg .uhb{width:var(--bs);height:var(--bs);font-size:calc(var(--bs)*.44)}
+#uhg .uhb.sm{width:var(--ts);height:var(--ts);font-size:calc(var(--ts)*.5)}
+#uhg .uhb.lab{font-size:calc(var(--bs)*.4)}#uhg .uhb.lab small{font-size:calc(var(--bs)*.17)}
+#uhg #uhj{right:calc(var(--mg) + env(safe-area-inset-right,0px))!important;bottom:calc(var(--mg) + env(safe-area-inset-bottom,0px))!important;left:auto!important;top:auto!important;margin:0!important}
+#uhg #uha{right:calc(var(--mg) + var(--bs) + var(--gp) + env(safe-area-inset-right,0px))!important;bottom:calc(var(--mg) + env(safe-area-inset-bottom,0px))!important;left:auto!important;top:auto!important;margin:0!important}
+#uhg #uhdg{right:calc(var(--mg) + env(safe-area-inset-right,0px))!important;bottom:calc(var(--mg) + var(--bs) + var(--gp) + env(safe-area-inset-bottom,0px))!important;left:auto!important;top:auto!important;margin:0!important}
+#uhg #uhpl{right:calc(var(--mg) + var(--bs) + var(--gp) + env(safe-area-inset-right,0px))!important;bottom:calc(var(--mg) + var(--bs) + var(--gp) + env(safe-area-inset-bottom,0px))!important;left:auto!important;top:auto!important;margin:0!important}
+#uhg #uhx{right:calc(10px + env(safe-area-inset-right,0px))!important;top:calc(8px + env(safe-area-inset-top,0px))!important;left:auto!important;bottom:auto!important;margin:0!important}
+#uhg #uhcb{right:calc(10px + var(--ts) + var(--gp) + env(safe-area-inset-right,0px))!important;top:calc(8px + env(safe-area-inset-top,0px))!important;left:auto!important;bottom:auto!important;margin:0!important}
+#uhg #uhm{right:calc(10px + (var(--ts) + var(--gp))*2 + env(safe-area-inset-right,0px))!important;top:calc(8px + env(safe-area-inset-top,0px))!important;left:auto!important;bottom:auto!important;margin:0!important}
+#uhg #uhtop{font-size:13px;line-height:1.35;left:calc(10px + env(safe-area-inset-left,0px));top:calc(8px + env(safe-area-inset-top,0px));max-width:calc(100% - (var(--ts) + var(--gp))*3 - 30px)}
+#uhg #uhfeed{top:calc(64px + env(safe-area-inset-top,0px));font-size:12px;max-width:42%;left:calc(10px + env(safe-area-inset-left,0px))}
+#uhg #uhbar{left:50%!important;right:auto!important;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;width:max-content;max-width:min(40vw,340px);flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto;overflow-y:hidden;gap:4px!important;padding:3px!important;background:#0008;border-radius:12px;touch-action:pan-x;scrollbar-width:none;-webkit-overflow-scrolling:touch;z-index:4}
+#uhg #uhbar::-webkit-scrollbar{display:none}
+#uhg .uhi{flex:none;min-width:34px!important;padding:2px 4px!important;font-size:18px!important;border-radius:8px!important}
+#uhg .uhi i{font-size:10px!important;right:2px!important}
+#uhg .uhhint{white-space:nowrap;font-size:12px;padding:3px 8px}
+#uhjz{position:absolute;left:0;bottom:0;width:44%;height:68%;z-index:3;touch-action:none}
+#uhjb{position:absolute;width:${R*2}px;height:${R*2}px;border-radius:50%;background:#ffffff18;border:2px solid #ffffff50;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));opacity:.6;transition:opacity .12s;pointer-events:none}
+#uhjb.on{opacity:1;background:#ffffff26}
+#uhjb i{position:absolute;font-style:normal;font-size:11px;color:#fff;opacity:.55}#uhjb .jl{left:6px;top:50%;margin-top:-7px}#uhjb .jr{right:6px;top:50%;margin-top:-7px}#uhjb .ju{top:3px;left:50%;margin-left:-5px}#uhjb .jd{bottom:3px;left:50%;margin-left:-5px}
+#uhjk{position:absolute;left:50%;top:50%;width:${Math.round(R*.95)}px;height:${Math.round(R*.95)}px;margin:${-Math.round(R*.475)}px 0 0 ${-Math.round(R*.475)}px;border-radius:50%;background:#ffffffb0;border:2px solid #fff;box-shadow:0 2px 8px #0007}
+@media (max-height:420px){#uhg #uhfeed{display:none}}
+body.uhplay #musb,body.uhplay #musn{display:none!important}`;
+document.head.appendChild(s);
+})();
 </script></body></html>
