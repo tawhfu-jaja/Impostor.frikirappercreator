@@ -2822,7 +2822,7 @@ function uhOpenG(){if(UHG||!UHO.world||!UHO.room)return;const r=UHO.room;
  const d=document.createElement('div');d.id='uhg';d.innerHTML=`<canvas id="uhc"></canvas><div id="uhtop"></div><div id="uhfeed"></div><div id="uhban"></div><div id="uhbar"></div>
  <div class="uhb" id="uhl" style="left:12px;bottom:14px">◀</div><div class="uhb" id="uhr" style="left:84px;bottom:14px">▶</div>
  <div class="uhb" id="uhj" style="right:12px;bottom:14px">⤒</div><div class="uhb" id="uha" style="right:84px;bottom:14px">⚔️</div><div class="uhb sm" id="uhm" style="right:12px;top:64px">⛏️</div>
- <div class="uhb sm" id="uhcb" style="right:12px;top:12px">🔨</div><div class="uhb sm" id="uhx" style="right:64px;top:12px">🚪</div><div id="uhcr"></div>`;document.body.appendChild(d);
+ <div class="uhb sm" id="uhcb" style="right:12px;top:12px">🔨</div><div class="uhb sm" id="uhx" style="right:64px;top:12px">🚪</div><div id="uhcr"></div>${uhCtl()}`;document.body.appendChild(d);
  UHG={el:d,cv:d.querySelector('#uhc'),w:null,L:{x:0,y:0,vx:0,vy:0,g:false,f:1,kb:0},keys:{},inv:{},chests:[],pl:{},st:null,feed:[],cam:{x:0,y:0},T:24,tiles:null,place:false,sel:null,mine:null,ptr:null,part:[],last:performance.now(),sent:0,spec:0,imgs:{},hit:0,prevA:{},init:false,craftOpen:false,raf:0,tick:0};
  uhBuildWorld();uhInvUpd();uhBind();UHG.raf=requestAnimationFrame(uhLoop);uhRoomUpd(null,r)}
 function uhCloseG(){if(!UHG)return;cancelAnimationFrame(UHG.raf);uhUnbind();UHG.el.remove();UHG=null}
@@ -2839,9 +2839,9 @@ function uhCraftUI(){const G=UHG,I=G.inv,c=G.el.querySelector('#uhcr');c.style.d
  c.innerHTML=`<div class="uhcp"><b>🔨 Fabricar</b><span class="uhxx" data-c="x">✖</span>${UH_REC.map(q=>{const ok=Object.keys(q[2]).every(k=>I[k]>=q[2][k]);return `<div class="uhrc${ok?'':' no'}" data-c="${q[0]}"><b>${UH_IT[q[0]][0]} ${q[1]}</b><small>${Object.keys(q[2]).map(k=>UH_IT[k][0]+q[2][k]+(I[k]>=q[2][k]?'':'✗')).join(' ')}</small></div>`}).join('')}</div>`}
 /* --- entrada --- */
 function uhBind(){const G=UHG,K=G.keys,hold=(id,k)=>{const e=G.el.querySelector('#'+id);const dn=ev=>{ev.preventDefault();K[k]=1;e.classList.add('on');try{e.setPointerCapture(ev.pointerId)}catch(x){}},up=ev=>{K[k]=0;e.classList.remove('on')};e.addEventListener('pointerdown',dn);e.addEventListener('pointerup',up);e.addEventListener('pointercancel',up);e.addEventListener('lostpointercapture',up)};
- hold('uhl','l');hold('uhr','r');hold('uhj','j');
+ hold('uhl','l');hold('uhr','r');hold('uhj','j');hold('uhdg','dg');hold('uhpl','pl');
  const tap=(id,f)=>G.el.querySelector('#'+id).addEventListener('pointerdown',ev=>{ev.preventDefault();f()});
- tap('uha',uhAttack);tap('uhm',()=>{G.place=!G.place;uhModeUI()});tap('uhcb',()=>{G.craftOpen=!G.craftOpen;uhCraftUI()});
+ tap('uha',uhAttack);uhBindCtl();tap('uhm',()=>{G.place=!G.place;uhModeUI()});tap('uhcb',()=>{G.craftOpen=!G.craftOpen;uhCraftUI()});
  tap('uhx',()=>{const r=UHO.room;if(r&&r.phase=='end'){uhCloseG();ARC='uh';R();return}if(confirm('¿Salir de la partida? Quedarás eliminado.')){uhLeave();ARC=null;R()}});
  G.el.querySelector('#uhbar').addEventListener('pointerdown',ev=>{const s=ev.target.closest('.uhi');if(!s)return;ev.preventDefault();const k=s.dataset.k;if(UH_PLACE[k]){G.sel=k;G.place=true;uhModeUI();uhInvUpd()}else if(k=='apple'||k=='gapple')ioSend({t:'uh_eat',it:k})});
  G.el.querySelector('#uhcr').addEventListener('pointerdown',ev=>{const e=ev.target.closest('[data-c]');if(!e)return;ev.preventDefault();if(e.dataset.c=='x'){G.craftOpen=false;uhCraftUI()}else ioSend({t:'uh_craft',id:e.dataset.c})});
@@ -2851,8 +2851,8 @@ function uhBind(){const G=UHG,K=G.keys,hold=(id,k)=>{const e=G.el.querySelector(
  const up=()=>{G.ptr=null;G.mine=null};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
  G.kd=e=>{const k=e.key.toLowerCase();if(k=='a'||k=='arrowleft')K.l=1;else if(k=='d'||k=='arrowright')K.r=1;else if(k=='w'||k=='arrowup'||k==' ')K.j=1;else if(k=='f'||k=='j'){if(!e.repeat)uhAttack()}else if(k=='e'&&!e.repeat){G.craftOpen=!G.craftOpen;uhCraftUI()}else if(k=='q'&&!e.repeat){G.place=!G.place;uhModeUI()}else return;e.preventDefault()};
  G.ku=e=>{const k=e.key.toLowerCase();if(k=='a'||k=='arrowleft')K.l=0;else if(k=='d'||k=='arrowright')K.r=0;else if(k=='w'||k=='arrowup'||k==' ')K.j=0};
- document.addEventListener('keydown',G.kd);document.addEventListener('keyup',G.ku);G.rs=()=>{G.tiles=null};window.addEventListener('resize',G.rs);uhModeUI()}
-function uhUnbind(){const G=UHG;document.removeEventListener('keydown',G.kd);document.removeEventListener('keyup',G.ku);window.removeEventListener('resize',G.rs)}
+ document.addEventListener('keydown',G.kd);document.addEventListener('keyup',G.ku);G.rs=()=>{G.tiles=null;uhOrient()};window.addEventListener('resize',G.rs);window.addEventListener('orientationchange',G.rs);uhModeUI();uhOrient()}
+function uhUnbind(){const G=UHG;document.removeEventListener('keydown',G.kd);document.removeEventListener('keyup',G.ku);window.removeEventListener('resize',G.rs);window.removeEventListener('orientationchange',G.rs)}
 function uhModeUI(){const e=UHG.el.querySelector('#uhm');e.textContent=UHG.place?'🧱':'⛏️';e.classList.toggle('on',UHG.place)}
 const uhCell=(G,sx,sy)=>{const W=G.cv.clientWidth,H=G.cv.clientHeight;return{x:(sx-W/2)/G.T+G.cam.x,y:(sy-H/2)/G.T+G.cam.y}};
 function uhEnemyAt(G,wx,wy){const me=uhMe(),r=UHO.room;let best=null,bd=1.1;r.ps.forEach((p,i)=>{const q=G.pl[i];if(i==me||!q||!q.al||p.left)return;const d=Math.hypot(q.x-wx,q.y-wy);if(d<bd){bd=d;best=i}});return best}
@@ -2874,8 +2874,8 @@ function uhLoop(now){const G=UHG;if(!G)return;G.raf=requestAnimationFrame(uhLoop
  if(G.init){uhPhys(L,G.w,dt);L.y=Math.min(L.y,UH_H-1.2)}
  G.sent+=dt;if(G.init&&G.al&&G.sent>.066){G.sent=0;ioSend({t:'uh_pos',x:+L.x.toFixed(2),y:+L.y.toFixed(2),f:L.f,g:L.g?1:0})}
  /* picar continuo */
- if(G.ptr&&play)uhPointer(false);
- if(G.mine&&G.ptr&&play&&G.al){const m=G.mine,b=G.w.get(m.x,m.y);if(b!=m.b||b<=0){G.mine=null}else{const t=uhTier();if(t<UH_NEED[b]){if(!m.warn){m.warn=1;uhToast('Necesitas un pico mejor ('+['sin pico','madera','piedra','hierro','diamante'][UH_NEED[b]]+')')}}else{m.p+=dt*UH_SPD[t]/UH_HARD[b];if(Math.random()<dt*12)uhPart(m.x+.5,m.y+.5,b,1);if(m.p>=1){ioSend({t:'uh_break',x:m.x,y:m.y});G.w.set(m.x,m.y,0);uhPart(m.x+.5,m.y+.5,b,10);G.mine=null}}}}
+ if(G.ptr&&play)uhPointer(false);uhCtlTick(dt,play);
+ if(G.mine&&(G.ptr||K.dg)&&play&&G.al){const m=G.mine,b=G.w.get(m.x,m.y);if(b!=m.b||b<=0){G.mine=null}else{const t=uhTier();if(t<UH_NEED[b]){if(!m.warn){m.warn=1;uhToast('Necesitas un pico mejor ('+['sin pico','madera','piedra','hierro','diamante'][UH_NEED[b]]+')')}}else{m.p+=dt*UH_SPD[t]/UH_HARD[b];if(Math.random()<dt*12)uhPart(m.x+.5,m.y+.5,b,1);if(m.p>=1){ioSend({t:'uh_break',x:m.x,y:m.y});G.w.set(m.x,m.y,0);uhPart(m.x+.5,m.y+.5,b,10);G.mine=null}}}}
  /* otros jugadores */
  Object.keys(G.pl).forEach(i=>{const q=G.pl[i];if(q.tx!=null){const k=Math.min(1,dt*12);q.x+=(q.tx-q.x)*k;q.y+=(q.ty-q.y)*k}if(q.sw>0)q.sw-=dt});if(G.hit>0)G.hit-=dt;
  G.part=G.part.filter(p=>{p.l-=dt;p.vy+=20*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;return p.l>0});
@@ -3316,5 +3316,51 @@ function impoH(){
 .imcl{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.imc{padding:2px 9px;border-radius:12px;font-size:12px;font-weight:600;color:#fff}.imc.r1{background:#3b82f6}.imc.r2{background:#8b5cf6}.imc.r3{background:#ec4899}.imc.r0{background:#10b981}.imc.th{background:transparent;color:var(--tx2);border:1px dashed var(--bd);font-weight:400}
 .imvs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;width:100%}.imv{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:12px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);cursor:pointer}.imv:active{border-color:#fe2c55}.imv b{font-size:13px}.imv small{color:var(--tx2);font-size:11px;min-height:14px}
 .imlog{display:flex;flex-direction:column;gap:3px;font-size:13px;text-align:left;width:100%}`;document.head.appendChild(s)})();
+
+
+/* ======================================================================
+   UHC · modo horizontal en celular + botones para romper y poner bloques
+   ====================================================================== */
+const uhIn=(x,y)=>x>=0&&x<UH_W&&y>=0&&y<UH_H;
+const uhTouch=()=>{try{return matchMedia('(pointer:coarse)').matches}catch(e){return false}};
+function uhCtl(){return `<div class="uhb sm aim" id="uhau" style="left:12px;bottom:92px" title="Apuntar arriba">⬆️</div><div class="uhb sm aim" id="uhad" style="left:66px;bottom:92px" title="Apuntar abajo">⬇️</div>
+<div class="uhb lab dg" id="uhdg" style="right:12px;bottom:86px">⛏️<small>Romper</small></div><div class="uhb lab pl" id="uhpl" style="right:84px;bottom:86px">🧱<small>Poner</small></div>
+<div id="uhrot"><div class="uhrph">📱</div><b>Voltea el celular</b><span>para una mejor experiencia</span><button class="uhbtn" id="uhrf">🔄 Girar automáticamente</button><small id="uhrm">Si no gira, activa la rotación automática de tu celular.</small><a id="uhrs">Jugar así de todos modos</a></div>`}
+function uhBindCtl(){const G=UHG,q=id=>G.el.querySelector('#'+id),tg=(id,a)=>q(id).addEventListener('pointerdown',ev=>{ev.preventDefault();G.btnUsed=1;G.aim=G.aim==a?'f':a;uhAimUI()});
+ tg('uhau','u');tg('uhad','d');
+ q('uhdg').addEventListener('pointerdown',()=>{G.btnUsed=1});q('uhpl').addEventListener('pointerdown',()=>{G.btnUsed=1;const r=UHO.room;if(r&&r.phase=='play'&&G.al)uhPlaceAim();G.plT=.26});
+ q('uhrf').addEventListener('click',async()=>{const m=q('uhrm');try{const e=document.documentElement;if(!document.fullscreenElement&&e.requestFullscreen)await e.requestFullscreen();if(screen.orientation&&screen.orientation.lock){await screen.orientation.lock('landscape');m.textContent='Listo, girando…'}else m.textContent='Tu navegador no deja girar solo: voltea el celular a mano.'}catch(x){m.textContent='No se pudo girar solo: voltea el celular a mano.'}});
+ q('uhrs').addEventListener('click',()=>{G.rotOk=1;uhOrient()});uhAimUI()}
+function uhAimUI(){const G=UHG;if(!G)return;[['uhau','u'],['uhad','d']].forEach(([id,a])=>{const e=G.el.querySelector('#'+id);if(e)e.classList.toggle('on',G.aim==a)})}
+function uhOrient(){const G=UHG;if(!G)return;const e=G.el.querySelector('#uhrot');if(!e)return;e.style.display=(uhTouch()&&innerHeight>innerWidth&&!G.rotOk)?'flex':'none'}
+/* celdas que apunta el jugador: de frente (cuerpo bajo y alto), arriba o abajo */
+function uhAimCells(){const G=UHG,L=G.L,f=L.f<0?-1:1,a=G.aim||'f';
+ if(a=='u')return[[Math.floor(L.x),Math.floor(L.y-.85-.15)]];
+ if(a=='d')return[[Math.floor(L.x),Math.floor(L.y+.85+.15)]];
+ const cx=Math.floor(L.x+f*.9);return[[cx,Math.floor(L.y+.45)],[cx,Math.floor(L.y-.45)]]}
+const uhBrk=b=>b>0&&b!=11;
+function uhAimMine(){const G=UHG;return uhAimCells().find(c=>uhIn(c[0],c[1])&&uhBrk(G.w.get(c[0],c[1])))||null}
+function uhAimPlace(){const G=UHG;return uhAimCells().find(c=>uhIn(c[0],c[1])&&G.w.get(c[0],c[1])==0)||null}
+function uhDigAim(){const G=UHG,c=uhAimMine();if(!c){G.mine=null;return}if(!G.mine||G.mine.x!=c[0]||G.mine.y!=c[1])G.mine={x:c[0],y:c[1],p:0,b:G.w.get(c[0],c[1])}}
+function uhPlaceAim(){const G=UHG;if(!G.sel||!(G.inv[G.sel]>0)){if(!G.selMsg||performance.now()-G.selMsg>2500){G.selMsg=performance.now();uhToast('Elige un bloque en la barra de abajo 🧱')}return}
+ const c=uhAimPlace();if(!c)return;ioSend({t:'uh_place',x:c[0],y:c[1],it:G.sel});try{navigator.vibrate&&navigator.vibrate(8)}catch(e){}}
+function uhCtlTick(dt,play){const G=UHG,K=G.keys;
+ if(K.dg&&play&&G.al){G._dg=1;uhDigAim()}else if(G._dg){G._dg=0;if(!G.ptr)G.mine=null}
+ if(K.pl&&play&&G.al){G.plT=(G.plT||0)-dt;if(G.plT<=0){G.plT=.26;uhPlaceAim()}}else G.plT=0}
+function uhReticle(){const G=UHG;if(!G||!G.w||G.al===false||!(G.btnUsed||uhTouch()))return;const r=UHO.room;if(!r||r.phase!='play')return;
+ const cv=G.cv,W=cv.clientWidth,H=cv.clientHeight,dpr=Math.min(2,devicePixelRatio||1),x=cv.getContext('2d');if(!W||!H)return;
+ let t=uhAimMine(),k='b';if(!t){t=uhAimPlace();k='p'}if(!t)return;
+ const T=G.T,sx=(t[0]-G.cam.x)*T+W/2,sy=(t[1]-G.cam.y)*T+H/2,col=k=='b'?'#ff5252':'#2ecc71';
+ x.save();x.setTransform(dpr,0,0,dpr,0,0);x.lineWidth=2;x.setLineDash([5,4]);x.strokeStyle=col;x.fillStyle=k=='b'?'#ff525228':'#2ecc7122';x.fillRect(sx,sy,T,T);x.strokeRect(sx+1,sy+1,T-2,T-2);x.restore()}
+{const _d=uhDraw;uhDraw=function(dt){_d(dt);try{uhReticle()}catch(e){}}}
+(function(){const s=document.createElement('style');s.textContent=`
+.uhb.lab{flex-direction:column;font-size:24px;line-height:1;gap:1px}.uhb.lab small{font-size:9px;font-weight:800;letter-spacing:.3px}
+.uhb.dg{background:#ff525255;border-color:#ff8a80}.uhb.dg.on{background:#ff5252aa}.uhb.pl{background:#2ecc7155;border-color:#69f0ae}.uhb.pl.on{background:#2ecc71aa}
+.uhb.aim.on{background:#ffe06699;border-color:#ffe066}
+#uhcb,#uhx{top:62px!important}#uhm{top:114px!important}
+#uhl,#uhau,#uhad{margin-left:env(safe-area-inset-left,0px)}#uhj,#uha,#uhdg,#uhpl,#uhm,#uhcb,#uhx{margin-right:env(safe-area-inset-right,0px)}
+#uhrot{display:none;position:absolute;inset:0;z-index:20;background:#0c0c12f2;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px}
+#uhrot b{font-size:24px}#uhrot span{font-size:16px;opacity:.9}#uhrot small{opacity:.7;max-width:280px}#uhrot a{font-size:13px;opacity:.75;text-decoration:underline;cursor:pointer;margin-top:6px}
+.uhrph{font-size:72px;animation:uhrot 2.2s ease-in-out infinite}@keyframes uhrot{0%,25%{transform:rotate(0)}60%,85%{transform:rotate(-90deg)}100%{transform:rotate(0)}}`;document.head.appendChild(s)})();
 
 </script></body></html>
