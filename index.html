@@ -3335,12 +3335,12 @@ function uhAimUI(){const G=UHG;if(!G)return;[['uhau','u'],['uhad','d']].forEach(
 function uhOrient(){const G=UHG;if(!G)return;const e=G.el.querySelector('#uhrot');if(!e)return;e.style.display=(uhTouch()&&innerHeight>innerWidth&&!G.rotOk)?'flex':'none'}
 /* celdas que apunta el jugador: de frente (cuerpo bajo y alto), arriba o abajo */
 function uhAimCells(){const G=UHG,L=G.L,f=L.f<0?-1:1,a=G.aim||'f';
- if(a=='u')return[[Math.floor(L.x),Math.floor(L.y-.85-.15)]];
- if(a=='d')return[[Math.floor(L.x),Math.floor(L.y+.85+.15)]];
+ if(a=='u')return[0,1,2].map(k=>[Math.floor(L.x),Math.floor(L.y-1-k)]);
+ if(a=='d')return[0,1,2].map(k=>[Math.floor(L.x),Math.floor(L.y+1+k)]);
  const cx=Math.floor(L.x+f*.9);return[[cx,Math.floor(L.y+.45)],[cx,Math.floor(L.y-.45)]]}
 const uhBrk=b=>b>0&&b!=11;
 function uhAimMine(){const G=UHG;return uhAimCells().find(c=>uhIn(c[0],c[1])&&uhBrk(G.w.get(c[0],c[1])))||null}
-function uhAimPlace(){const G=UHG;return uhAimCells().find(c=>uhIn(c[0],c[1])&&G.w.get(c[0],c[1])==0)||null}
+function uhAimPlace(){const G=UHG,sup=(x,y)=>[[1,0],[-1,0],[0,1],[0,-1]].some(d=>{const a=x+d[0],b=y+d[1];return uhIn(a,b)&&G.w.get(a,b)});return uhAimCells().find(c=>uhIn(c[0],c[1])&&G.w.get(c[0],c[1])==0&&sup(c[0],c[1]))||null}
 function uhDigAim(){const G=UHG,c=uhAimMine();if(!c){G.mine=null;return}if(!G.mine||G.mine.x!=c[0]||G.mine.y!=c[1])G.mine={x:c[0],y:c[1],p:0,b:G.w.get(c[0],c[1])}}
 function uhPlaceAim(){const G=UHG;if(!G.sel||!(G.inv[G.sel]>0)){if(!G.selMsg||performance.now()-G.selMsg>2500){G.selMsg=performance.now();uhToast('Elige un bloque en la barra de abajo 🧱')}return}
  const c=uhAimPlace();if(!c)return;ioSend({t:'uh_place',x:c[0],y:c[1],it:G.sel});try{navigator.vibrate&&navigator.vibrate(8)}catch(e){}}
@@ -3385,7 +3385,9 @@ function uhJoyInit(){const G=UHG;if(!G||G.joy)return;const el=G.el;
  z.addEventListener('pointerup',end);z.addEventListener('pointercancel',end);z.addEventListener('lostpointercapture',end);
  G.joy=1}
 {const _o=uhOpenG;uhOpenG=function(){const had=!!UHG;_o.apply(this,arguments);if(!had&&UHG){document.body.classList.add('uhplay');try{uhJoyInit()}catch(e){console.error(e)}}}}
-{const _c=uhCloseG;uhCloseG=function(){_c.apply(this,arguments);document.body.classList.remove('uhplay')}}
+let shT=0,shOn=0;const shF=ev=>{ev.stopImmediatePropagation();ev.stopPropagation();if(ev.cancelable)ev.preventDefault()},SH=['click','dblclick','mouseup','touchend','pointerup'];
+function uhShield(ms){if(!shOn){shOn=1;SH.forEach(t=>window.addEventListener(t,shF,{capture:true,passive:false}))}clearTimeout(shT);shT=setTimeout(()=>{shOn=0;SH.forEach(t=>window.removeEventListener(t,shF,{capture:true}))},ms||650)}
+{const _c=uhCloseG;uhCloseG=function(){const had=!!UHG;if(had)uhShield(650);_c.apply(this,arguments);document.body.classList.remove('uhplay')}}
 {const _i=uhInvUpd;uhInvUpd=function(){const G=UHG,bar=G&&G.el.querySelector('#uhbar'),sl=bar?bar.scrollLeft:0;_i.apply(this,arguments);if(bar){bar.scrollLeft=sl}}}
 const s=document.createElement('style');s.textContent=`
 #uhg{--bs:clamp(42px,12.5vh,58px);--ts:clamp(34px,10vh,42px);--gp:8px;--mg:12px}
