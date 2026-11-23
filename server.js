@@ -285,7 +285,7 @@ const uhPic = o => { o = o || {}; return { d: typeof o.d === 'string' && o.d.ind
 function uhSnap(r, pid) {
   const el = uhEl(r), b = uhBorder(el);
   return { id: r.id, code: r.code, quick: !!r.quick, phase: r.phase, host: r.host, me: pid, cdEnd: r.cdEnd || 0, now: Date.now(), el, bl: b.l, br: b.r, grace: UH_GRACE, sh0: UH_SH0, sh1: UH_SH1, spd: UH_SPEED,
-    qEnd: r.qT ? r.qEnd : 0, win: r.win || null, ps: r.ps.map((p, i) => ({ i, pid: p.pid, name: p.name, on: p.on, al: !!p.al, k: p.k || 0, pic: p.pic, left: !!p.left })) };
+    qEnd: r.qT ? r.qEnd : 0, win: r.win || null, ps: r.ps.map((p, i) => ({ i, pid: p.pid, name: p.name, on: p.on, al: !!p.al, k: p.k || 0, pic: p.pic, left: !!p.left, bot: !!p.bot })) };
 }
 const uhAll = (r, o) => r.ps.forEach(m => { const p = players.get(m.pid); if (p && m.on) send(p, o); });
 const uhBroadcast = r => r.ps.forEach(m => { const p = players.get(m.pid); if (p && m.on) send(p, { t: 'uh_room', room: uhSnap(r, m.pid) }); });
@@ -336,8 +336,8 @@ function uhLeave(p) {
   const m = r.ps.find(x => x.pid === p.pid); if (!m) return;
   if (r.phase === 'lobby' || r.phase === 'end') { r.ps = r.ps.filter(x => x.pid !== p.pid); }
   else { m.left = true; m.on = false; if (m.al) uhDie(r, m, 'abandonó la partida'); }
-  if (!r.ps.some(x => x.on && !x.left)) { clearTimeout(r.cdT); clearTimeout(r.qT); uhs.delete(r.id); return; }
-  if (r.host === p.pid) r.host = r.ps.find(x => x.on && !x.left).pid;
+  if (!r.ps.some(x => x.on && !x.left && !x.bot)) { clearTimeout(r.cdT); clearTimeout(r.qT); uhs.delete(r.id); return; }
+  if (r.host === p.pid) r.host = r.ps.find(x => x.on && !x.left && !x.bot).pid;
   uhBroadcast(r);
 }
 function uhMsgIn(p, m) {
@@ -353,6 +353,11 @@ function uhMsgIn(p, m) {
       const code = clean(m.code, 8).toUpperCase(), w = [...uhs.values()].find(x => x.code === code);
       if (!w) return err(p, 'Código incorrecto o sala inexistente'); if (w.phase !== 'lobby' || w.ps.length >= UH_MAXP) return err(p, 'Esa sala ya empezó o está llena');
       return uhJoin(p, w, m.pic);
+    }
+    case 'uh_solo': {
+      if (r || rooms.get(p.roomId) || aucs.get(p.aroom)) return err(p, 'Ya estás en una sala');
+      const nr = uhNew(p, m.pic, false); nr.solo = true; uhAddBots(nr, Math.max(1, Math.min(UH_MAXP - 1, +m.n || 4)));
+      const e = uhStart(nr); return e ? err(p, e) : null;
     }
     case 'uh_leave': return uhLeave(p);
     case 'uh_start': { if (!r || r.host !== p.pid || r.phase !== 'lobby') return; const e = uhStart(r); return e ? err(p, e) : null; }
@@ -418,6 +423,77 @@ function uhTick() {
   });
 }
 setInterval(uhTick, 100);
+/* ---------- BOTS del UHC (modo solo / pruebas) ---------- */
+const BOT_NAMES = ['Aldo', 'Brisa', 'Kai', 'Lumi', 'Nox', 'Pipa', 'Rex', 'Sol', 'Taro', 'Uma', 'Vex', 'Yuki'], BOT_COL = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
+const botDo = (r, m, o) => uhMsgIn({ pid: m.pid, name: m.name, uroom: r.id }, o);
+const botFeet = m => Math.round(m.y + .86);                       // fila que pisa (los pies siempre en entero)
+function botFall(r, m) { let g = 0; while (g++ < 6) { const f = botFeet(m); if (f >= UH_H - 1 || r.w.get(Math.floor(m.x), f) > 0) break; m.y += 1; } m.y = botFeet(m) - .86; }
+function botBreak(r, m, x, y) { if (r.w.get(x, y) <= 0) return true; botDo(r, m, { t: 'uh_break', x, y }); return r.w.get(x, y) <= 0; }
+function botGo(r, m, gx, gy) {                                      // camina hacia (gx,gy) cavando si hace falta; devuelve false si se atoró
+  const G = (x, y) => r.w.get(x, y), feet = botFeet(m), c0 = Math.floor(m.x), dx = gx - m.x, dy = gy - m.y;
+  if (Math.abs(dx) < .6 && dy > 1.2) return botBreak(r, m, c0, feet);                                   // objetivo debajo: cavar hacia abajo
+  const dir = dx >= 0 ? 1 : -1, nx = Math.max(.6, Math.min(UH_W - .6, m.x + dir * .5)), c = Math.floor(nx), r0 = feet - 1, r1 = feet - 2; m.f = dir;
+  if (!G(c, r0) && !G(c, r1)) { m.x = nx; return true; }
+  if (G(c, r0) && !G(c, r1) && !G(c, r1 - 1) && !G(c0, r1 - 1)) { m.y -= 1; m.x = nx; return true; }  // sube un escalón
+  const L = dy < -1.2 ? [[c0, r1 - 1], [c, r1 - 1], [c, r1]] : [[c, r1], [c, r0]];                       // si el objetivo está arriba, hace escalera
+  for (const [x, y] of L) if (G(x, y) > 0) return botBreak(r, m, x, y);
+  return true;
+}
+function botCraft(r, m) {
+  const c = id => botDo(r, m, { t: 'uh_craft', id }), n = k => m.inv[k] || 0;
+  if (n('log') > 0 && n('planks') < 8) c('planks');
+  if (n('planks') >= 2 && n('stick') < 4) c('stick');
+  if (!n('wpick') && !n('spick') && !n('ipick') && !n('dpick') && n('planks') >= 3 && n('stick') >= 2) c('wpick');
+  if (!n('wsword') && !n('ssword') && !n('isword') && !n('dsword') && n('planks') >= 2 && n('stick') >= 1) c('wsword');
+  if (!n('spick') && !n('ipick') && !n('dpick') && n('cobble') >= 3 && n('stick') >= 2) c('spick');
+  if (!n('ssword') && !n('isword') && !n('dsword') && n('cobble') >= 2 && n('stick') >= 1) c('ssword');
+  if (!n('ipick') && !n('dpick') && n('iron') >= 3 && n('stick') >= 2) c('ipick');
+  if (!n('isword') && !n('dsword') && n('iron') >= 2 && n('stick') >= 1) c('isword');
+  if (!n('iarmor') && !n('darmor') && n('iron') >= 10) c('iarmor');
+  if (!n('dpick') && n('diamond') >= 3 && n('stick') >= 2) c('dpick');
+  if (!n('dsword') && n('diamond') >= 2 && n('stick') >= 1) c('dsword');
+  if (!n('darmor') && n('diamond') >= 8) c('darmor');
+  if (n('gold') >= 5) c('gapple');
+}
+function uhBot(r, m, now) {
+  if (!m.ai || m.ai.s !== r.seed) m.ai = { s: r.seed, dir: Math.random() < .5 ? -1 : 1, craftT: 0, stuck: 0, lx: m.x, ly: m.y, tx: 0 };
+  const ai = m.ai, w = r.w, el = uhEl(r), bd = uhBorder(el);
+  if (r.phase !== 'play') return botFall(r, m);
+  if (m.hp <= 10 && now - m.lastEat > 1000) { if (m.inv.gapple > 0) botDo(r, m, { t: 'uh_eat', it: 'gapple' }); else if (m.hp <= 14 && m.inv.apple > 0) botDo(r, m, { t: 'uh_eat', it: 'apple' }); }
+  if (now - ai.craftT > 1200) { ai.craftT = now; botCraft(r, m); }
+  const tier = uhPick(m), sw = uhWeapon(m).dmg, n = k => m.inv[k] || 0;
+  let foe = null, fd = 1e9; r.ps.forEach(o => { if (o !== m && o.al) { const d = Math.hypot(o.x - m.x, o.y - m.y); if (d < fd) { fd = d; foe = o; } } });
+  let ok = true;
+  if (m.x < bd.l + 4 || m.x > bd.r - 4) ok = botGo(r, m, UH_W / 2, m.y);                                  // el borde manda
+  else if (foe && (el >= UH_GRACE - 10 && sw >= 4 || el >= UH_GRACE + 150)) {                              // cazar
+    if (fd <= 3.2 && el >= UH_GRACE) { m.f = foe.x >= m.x ? 1 : -1; botDo(r, m, { t: 'uh_hit', id: foe.pid }); }
+    else ok = botGo(r, m, foe.x, foe.y);
+  } else if (!tier) {                                                                                       // 1) madera
+    let best = null, bd2 = 1e9; const c0 = Math.floor(m.x);
+    for (let x = Math.max(1, c0 - 30); x < Math.min(UH_W - 1, c0 + 30); x++) { const s = w.surf[x]; for (let y = s - 8; y < s; y++) if (w.get(x, y) === 4) { const d = Math.abs(x - m.x) + Math.abs(y - m.y) * .5; if (d < bd2) { bd2 = d; best = [x, y]; } } }
+    if (!best) ok = botGo(r, m, m.x + ai.dir * 20, m.y);
+    else if (Math.hypot(best[0] + .5 - m.x, best[1] + .5 - m.y) <= 5.5) botBreak(r, m, best[0], best[1]);
+    else ok = botGo(r, m, best[0] + .5, m.y);
+  } else if (tier < 2) {                                                                                    // 2) piedra: cavar hacia abajo
+    ok = botBreak(r, m, Math.floor(m.x), botFeet(m));
+  } else {                                                                                                  // 3) minar: bajar y hacer túnel buscando minerales
+    const s = w.surf[Math.floor(m.x)] || 26, depth = botFeet(m) - s, want = Math.min(UH_H - 8, s + 22);
+    ok = depth < 18 ? botBreak(r, m, Math.floor(m.x), botFeet(m)) : botGo(r, m, m.x + ai.dir * 12, botFeet(m));
+    void want;
+  }
+  if (tier >= 2 || n('log') + n('planks') >= 0) {                                                           // recoger minerales cercanos
+    const cx = Math.floor(m.x), cy = botFeet(m) - 1; let done = false;
+    for (let dx = -3; dx <= 3 && !done; dx++) for (let dy = -3; dy <= 3 && !done; dy++) { const b = w.get(cx + dx, cy + dy); if ((b === 6 || b === 7 || b === 8) && tier >= UH_NEED[b]) { botBreak(r, m, cx + dx, cy + dy); done = true; } }
+  }
+  botFall(r, m);
+  if (Math.abs(m.x - ai.lx) < .1 && Math.abs(m.y - ai.ly) < .1) ai.stuck++; else ai.stuck = 0; ai.lx = m.x; ai.ly = m.y;
+  if (!ok || ai.stuck > 12) { ai.dir = -ai.dir; ai.stuck = 0; if (!ok) { const c = Math.floor(m.x), f = botFeet(m); botBreak(r, m, c, f - 1); botBreak(r, m, c, f - 2); } }
+}
+setInterval(() => { const now = Date.now(); uhs.forEach(r => { if (r.phase !== 'play' && r.phase !== 'count') return; r.ps.forEach(m => { if (m.bot && m.al) { try { uhBot(r, m, now); } catch (e) { } } }); }); }, 200);
+function uhAddBots(r, n) {
+  shuffle(BOT_NAMES).slice(0, n).forEach((nm, i) => r.ps.push({ pid: 'bot' + crypto.randomBytes(5).toString('hex'), name: '🤖 ' + nm, on: true, bot: true, pic: { d: '', e: '🤖', c: BOT_COL[i % BOT_COL.length] } }));
+}
+
 
 /* ---------- mensajes ---------- */
 function onMsg(p, m) {
